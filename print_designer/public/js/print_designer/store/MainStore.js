@@ -90,6 +90,7 @@ export const useMainStore = defineStore("MainStore", {
 			headerHeightWithMargin: 0,
 			footerHeightWithMargin: 0,
 			UOM: "mm",
+			isRawPrintEnable:false
 		},
 		controls: {
 			MousePointer: {
