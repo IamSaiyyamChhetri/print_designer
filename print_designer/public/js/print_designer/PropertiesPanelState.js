@@ -339,7 +339,7 @@ export const createPropertiesPanel = () => {
 				label: "Raw Cmd Language",
 				name: "rawCmdLang",
 				isLabelled: true,
-				condtional: () => MainStore.getCurrentElementsId.length < 1,
+				condtional: () => MainStore.getCurrentElementsId.length < 1 && MainStore.frappeControls['isRawPrintEnable'] && MainStore.frappeControls['isRawPrintEnable'].value == 'true',
 				frappeControl: (ref, name) => {
 					const MainStore = useMainStore();
 					makeFeild({
@@ -364,7 +364,12 @@ export const createPropertiesPanel = () => {
 				label: "Raw Cmd Before Element",
 				name: "rawCmdBeforeEle",
 				isLabelled: true,
-				condtional: () => MainStore.getCurrentElementsId.length == 1,
+				condtional: () => {
+					return (
+						MainStore.getCurrentElementsId.length == 1 && MainStore.frappeControls['isRawPrintEnable'] 
+						&& MainStore.frappeControls['isRawPrintEnable'].value == 'true'
+					)
+				},
 				frappeControl: (ref, name) => {
 					const MainStore = useMainStore();
 					makeFeild({
@@ -375,6 +380,7 @@ export const createPropertiesPanel = () => {
 						options: () => [
 							{ label: "Paper Cut", value: "paper_cut" },
 							{ label: "Partial Paper Cut", value: "partial_paper_cut" },
+							{ label: "Custom", value: "custom" },
 						],
 						reactiveObject: () => MainStore.getCurrentElementsValues[0],
 						propertyName: "rawCmdBeforeEle",
@@ -385,7 +391,11 @@ export const createPropertiesPanel = () => {
 				label: "Custom Raw Cmd Before Element",
 				name: "customRawCmdBeforeEle",
 				isLabelled: true,
-				condtional: () => MainStore.getCurrentElementsId.length == 1,
+				condtional: () => {
+					return (MainStore.getCurrentElementsId.length == 1  && MainStore.frappeControls['rawCmdBeforeEle']   
+						&& MainStore.frappeControls['isRawPrintEnable'] && MainStore.frappeControls['isRawPrintEnable'].value == 'true' 
+						&& MainStore.frappeControls['rawCmdBeforeEle'].value == 'custom')
+				},
 				frappeControl: (ref, name) => {
 					const MainStore = useMainStore();
 					makeFeild({
@@ -402,7 +412,12 @@ export const createPropertiesPanel = () => {
 				label: "Raw Cmd After Element",
 				name: "rawCmdAfterEle",
 				isLabelled: true,
-				condtional: () => MainStore.getCurrentElementsId.length == 1,
+				condtional: () => {
+					return (
+						MainStore.getCurrentElementsId.length == 1 && MainStore.frappeControls['isRawPrintEnable'] 
+						&& MainStore.frappeControls['isRawPrintEnable'].value == 'true'
+					)
+				},
 				frappeControl: (ref, name) => {
 					const MainStore = useMainStore();
 					makeFeild({
@@ -413,6 +428,7 @@ export const createPropertiesPanel = () => {
 						options: () => [
 							{ label: "Paper Cut", value: "paper_cut" },
 							{ label: "Partial Paper Cut", value: "partial_paper_cut" },
+							{ label: "Custom", value: "custom" },
 						],
 						reactiveObject: () => MainStore.getCurrentElementsValues[0],
 						propertyName: "rawCmdAfterEle",
@@ -423,7 +439,11 @@ export const createPropertiesPanel = () => {
 				label: "Custom Raw Cmd After Element",
 				name: "customRawCmdAfterEle",
 				isLabelled: true,
-				condtional: () => MainStore.getCurrentElementsId.length == 1,
+				condtional: () => {
+					return (MainStore.getCurrentElementsId.length == 1  && MainStore.frappeControls['rawCmdAfterEle']   
+						&& MainStore.frappeControls['isRawPrintEnable'] && MainStore.frappeControls['isRawPrintEnable'].value == 'true' 
+						&& MainStore.frappeControls['rawCmdAfterEle'].value == 'custom')
+				},
 				frappeControl: (ref, name) => {
 					const MainStore = useMainStore();
 					makeFeild({
