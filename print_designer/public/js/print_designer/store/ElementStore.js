@@ -483,26 +483,39 @@ export const useElementStore = defineStore("ElementStore", {
 			const elements = this.Elements;
 			const MainStore = useMainStore();
 
-			const throwOverlappingError = (type) => {
+			const throwOverlappingError = (type, changelayout) => {
 				let message = __(`Please resolve overlapping elements `);
 				const messageType = Object.freeze({
 					header: "<b>" + __("in header") + "</b>",
 					footer: "<b>" + __("in footer") + "</b>",
 					auto: __("in table, auto layout failed"),
-				});
-				message += messageType[type];
+
+					});
+					changelayout = (changelayout == undefined)? true:false
+					if (changelayout) {
+						MainStore.mode = "pdfSetup";
+						message += messageType[type];
+					}
+					frappe.show_alert(
+						{
+							message: message,
+							indicator: "red",
+					});
+					throw new Error(message);
+			}
+			if (MainStore.frappeControls['rawCmdLang'] && MainStore.frappeControls['rawCmdLang'].value == null){
 				frappe.show_alert(
 					{
-						message: message,
+						message: "Please select the language for raw cmd",
 						indicator: "red",
-					},
-					6
-				);
-				throw new Error(message);
-			};
+				});
+				throw new Error('Please select the language for raw cmd');
+			}
 
 			const tableElement = this.Elements.filter((el) => el.type == "table");
-
+			if(this.isParentElementOverlapping(elements)){
+				throwOverlappingError("element", false);
+			}
 			if (tableElement.length == 1 && MainStore.isHeaderFooterAuto) {
 				if (!this.autoCalculateHeaderFooter(tableElement[0])) {
 					throwOverlappingError("auto");
@@ -530,6 +543,44 @@ export const useElementStore = defineStore("ElementStore", {
 					}
 				});
 			}
+		},
+		isParentElementOverlapping(elements){
+			console.log("Overlapping....")
+			for(let index in elements){
+				let nextIndex = parseInt(index) + 1
+				let currEle = elements[index]
+				let firstEleObj = {}
+				let otherEleObj = {}
+				
+				for (let otherEleIndex in elements){
+					otherEleIndex = parseInt(otherEleIndex)
+					if( otherEleIndex < nextIndex) { continue; }
+					let otherEle = elements[otherEleIndex];
+					if (currEle.startY > otherEle.startY){
+						firstEleObj = {
+							'startY': otherEle.startY,
+							'endY': otherEle.startY + otherEle.height,
+						}
+					
+						otherEleObj = {
+							'startY': currEle.startY,
+						}
+					} else {
+						firstEleObj = {
+							'startY': currEle.startY,
+							'endY': currEle.startY + currEle.height,
+						}
+					
+						otherEleObj = {
+							'startY': otherEle.startY,
+						}
+					}
+					if ( otherEleObj.startY >= firstEleObj.startY && otherEleObj.startY <= firstEleObj.endY ){
+						return true
+					}	
+				}
+			}
+			return false
 		},
 		autoCalculateHeaderFooter(tableEl) {
 			const MainStore = useMainStore();

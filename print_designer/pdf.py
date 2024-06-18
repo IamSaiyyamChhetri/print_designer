@@ -7,7 +7,9 @@ from frappe.monitor import add_data_to_monitor
 from frappe.utils.error import log_error
 from frappe.utils.jinja_globals import is_rtl
 from frappe.utils.pdf import pdf_body_html as fw_pdf_body_html
-
+from frappe.www.printview import get_print_format_doc, validate_print_permission
+from frappe.model.document import Document
+import base64
 
 def pdf_header_footer_html(soup, head, content, styles, html_id, css):
 	if soup.find(id="__print_designer"):
@@ -118,3 +120,112 @@ def get_print_format_template(jenv, print_format):
 			return jenv.loader.get_source(
 				jenv, "print_designer/page/print_designer/jinja/print_format.html"
 			)[0]
+
+@frappe.whitelist()
+def get_raw_cmd_render_pd(doc: str, name: str | None = None, print_format: str | None = None):
+	
+	if isinstance(name, str):
+		document = frappe.get_doc(doc, name)
+	else:
+		document = frappe.get_doc(json.loads(doc))
+	document.check_permission()
+	print_format = get_print_format_doc(print_format, meta=document.meta)
+	
+	return get_rendered_template_pd(doc=document, print_format=print_format)
+
+
+def get_rendered_template_pd(
+	doc: "Document",
+	print_format: str | None = None,
+):
+	
+	print_settings = frappe.get_single("Print Settings").as_dict()
+	
+	if not frappe.flags.ignore_print_permissions:
+		validate_print_permission(doc)
+	
+	element_List = json.loads(print_format.print_designer_print_format)
+	doc.run_method("before_print", print_settings)
+
+	jenv = frappe.get_jenv()
+	args = {}
+	settings = json.loads(print_format.print_designer_settings)
+	args.update(
+		{
+			"settings": settings,
+			"doc": doc,
+		}
+	)
+	template_source = jenv.loader.get_source( 				
+		jenv, "print_designer/page/print_designer/jinja/redner_element.html" 
+		)[0]
+	args.update({"afterTableElement": json.loads(print_format.print_designer_after_table or "[]")})
+	template = jenv.from_string(template_source)
+	html_with_raw_cmd_list = []
+	options = {
+				"language": 'ESCPOS',
+				"x": settings.get('page').get('marginTop'),
+				"y": settings.get('page').get('marginLeft'),
+				"dotDensity": "double",
+				"pageWidth": settings.get('page').get('width'),
+			}
+	
+	raw_cmd_lang = settings.get('page').get('rawCmdLang')
+	if raw_cmd_lang is None:
+		return {'status' : False, 'msg' : 'Language is not selected from Print Designer'}
+	
+	for set_type in element_List:
+		for element in element_List[set_type]:
+			try :
+				rawCmdBeforeEle = element.get('childrens')[0].get('rawCmdBeforeEle', ' ').strip()
+				rawCmdAfterEle = element.get('childrens')[0].get('rawCmdAfterEle', ' ').strip()
+				
+				if rawCmdBeforeEle != "" and rawCmdBeforeEle != 'custom':
+					rawCmdBeforeEle = convert_str_raw_cmd(rawCmdBeforeEle, raw_cmd_lang)
+				elif rawCmdBeforeEle == 'custom':
+					rawCmdBeforeEle = element.get('childrens')[0].get('customRawCmdBeforeEle', ' ').strip()
+
+				if rawCmdAfterEle != "" and rawCmdAfterEle != 'custom':
+					rawCmdAfterEle = convert_str_raw_cmd(rawCmdAfterEle, raw_cmd_lang)
+				elif rawCmdAfterEle == 'custom':
+					rawCmdAfterEle = element.get('childrens')[0].get('customRawCmdAfterEle', ' ').strip()
+
+				args.update({"element": [element]})
+				#Need to change options value to raw_cmd
+				rendered_html = template.render(args, filters={"len": len})
+				html_with_raw_cmd_list.append({'type': 'raw', 'format': 'command', 'flavor': 'plain', 'data': rawCmdBeforeEle})
+				element_type = element.get("childrens")[0].get("childrens")[0].get("childrens")[0].get("type")
+				if element_type == 'image':
+					file_path = element.get("childrens")[0].get("childrens")[0].get("childrens")[0].get("image").get('file_url')
+					file_path = f'{frappe.local.site}{file_path}'
+					base64_image = get_base64_encoded_image(file_path)
+					frappe.log_error("Base64 Encoded Image:", base64_image)
+					html_with_raw_cmd_list.append({ 'type': 'raw', 'format': 'image', 'flavor': 'file',  "data": "data:image/jpeg;base64," + base64_image, 'options': options })
+				else:		
+					html_with_raw_cmd_list.append({ 'type': 'raw', 'format': 'html', 'flavor': 'plain', 'data': rendered_html, 'options': options})
+				html_with_raw_cmd_list.append({'type': 'raw', 'format': 'command', 'flavor': 'plain', 'data': rawCmdAfterEle})
+			except Exception as e :
+				error = log_error(title=e, reference_doctype="Print Format", reference_name=print_format.name)
+				if frappe.conf.developer_mode:
+					return { 'status' : False, 'msg' : f"<h1><b>Something went wrong while rendering the print format.</b> <hr/> If you don't know what just happened, and wish to file a ticket or issue on Github <hr /> Please copy the error from <code>Error Log {error.name}</code> or ask Administrator.<hr /><h3>Error rendering print format: {error.reference_name}</h3><h4>{error.method}</h4><pre>{html.escape(error.error)}</pre>"}
+				else:
+					return { 'status' : False, 'msg' : f"<h1><b>Something went wrong while rendering the print format.</b> <hr/> If you don't know what just happened, and wish to file a ticket or issue on Github <hr /> Please copy the error from <code>Error Log {error.name}</code> or ask Administrator.</h1>"}
+
+	return {'status' : True, 'raw_commands' : html_with_raw_cmd_list}
+
+def convert_str_raw_cmd(raw_string, printer_lang):
+	str_cmd_dict = {
+		'paper_cut' : {
+			'ESCPOS' : "\x1D\x56\x30",
+		},
+		'partial_paper_cut' : {
+			'ESCPOS' : "\x1D\x56\x01"
+		}
+	}
+	return str_cmd_dict[raw_string][printer_lang]
+
+def get_base64_encoded_image(file_path):
+    with open(file_path, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+        return encoded_string
+
